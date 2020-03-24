@@ -20,7 +20,7 @@ Parameters:
 -c, --cutoff: float, the cutoff (between 0 to 1) used to choose significant genes.
 
 Example:
-python3 CNN_gene_picker.py -o False -c 0.64
+python3 CNN_gene_picker.py -o False -c 0.7
 
 ''' 
 
