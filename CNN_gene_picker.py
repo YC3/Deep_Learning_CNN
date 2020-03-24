@@ -140,7 +140,7 @@ if __name__ == '__main__':
             cutoff = float(opt_value)
 
     # read in data
-    data = pd.read_csv('tumor.csv', index_col = 0)
+    data = pd.read_csv('tumor_data.csv', index_col = 0)
 
     # read in CNN model
     cnn = tf.keras.models.load_model('model_cnn3_val.h5')
