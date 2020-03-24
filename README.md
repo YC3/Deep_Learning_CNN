@@ -4,7 +4,7 @@ The interpretability of a model is usually more important than prediction accura
 
 By using guided Grad-CAM, we can identify pixels that are important for image classification, which have enabled us to loook into the 'black box' of deep neural networks and understand how it works. 
 
-Here I downloaded a large gene expression dataset from TCGA (https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga), and embeded the data into 2D images, then trained a CNN model on it. The model accurately classified the 22 tumor types, and Grand-CAM also worked perfectly for tumor-specific gene identification as you can see in 'granCAM.png'.
+Here I downloaded a large gene expression dataset from TCGA (https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga), and embeded the data into 2D images, then trained a CNN model on it. The model accurately classified the 22 tumor types, and Grand-CAM also worked perfectly for tumor-specific gene identification as you can see in 'gradCAM.png'.
 
 The next step would be validating the selected genes in an independent dataset... 
 
