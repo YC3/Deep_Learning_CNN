@@ -5,6 +5,7 @@ from tensorflow.keras.optimizers import RMSprop
 from tensorflow.keras.utils import to_categorical
 from tensorflow.keras import regularizers
 from tensorflow.keras import models
+import random
 import operator
 import sys, getopt
 import cv2
@@ -18,12 +19,12 @@ import matplotlib.pyplot as plt
 Parameters:
 -o, --original: bool, whether show the original image or not.
 -c, --cutoff: float, the cutoff (between 0 to 1) used to choose significant genes.
+-t, --title: title of the output image.
 
 Example:
-python3 CNN_gene_picker.py -o False -c 0.7
+python3 CNN_gene_picker.py -o False -c 0.8 -t 'xxx.jpeg'
 
 ''' 
-
 
 
 def feature_filter(data):
@@ -38,6 +39,7 @@ def feature_filter(data):
     output = data.loc[:, selected.index]
     
     ncol = output.shape[1]
+    random.seed(3)
     rand_id = np.random.choice(range(0, ncol), ncol, replace = False)
     output_rand = output.iloc[:, rand_id]
     
@@ -72,42 +74,51 @@ def image_scaling(tensor4D):
     return output
 
 
-def gGradCAM(conv_model, data, img_num, class_num, conv_layer, if_save_img):
+@tf.RegisterGradient("GuidedRelu")
+def _gReluGradient(op, grad):
+    f_pos = tf.cast(op.outputs[0] > 0, "float32") # entries f^{l} > 0
+    R_pos = tf.cast(grad > 0, "float32") # entries R^{l+1} > 0
+
+    # guided backpropagation: R^l = (f^{l} > 0)(R^{l+1} > 0)R^{l+1}
+    return f_pos * R_pos * grad
+
+
+def gGradCAM(conv_model, data, img_num, class_num, conv_layer, img_title = 'output.jpeg'):
 
     # selected image
     img = data[img_num] 
     img_tensor = np.array([img])
-
+        
     # gradients of selected conv layer
-    grad_model = tf.keras.models.Model([conv_model.inputs], [conv_model.layers[conv_layer].output, conv_model.output])
+    grad_model = tf.keras.models.Model([conv_model.inputs], 
+                 [conv_model.layers[conv_layer].output, conv_model.output])
 
-    with tf.GradientTape() as tape:
-        featureMaps, predictions = grad_model(img_tensor)
-        loss = predictions[:, class_num] # class number
-
-    grads = tape.gradient(loss, featureMaps)[0]  # gradients for all channels
-    featr = featureMaps[0]                       # activations for all channels
-
-    # ReLU
-    grads = tf.cast(grads > 0, 'float32') * tf.cast(grads > 0, 'float32') * grads
+    g = tf.compat.v1.get_default_graph()
+    with g.gradient_override_map({'Relu': 'gRelu'}):
+        with tf.GradientTape() as tape:
+            featureMaps, predictions = grad_model(img_tensor)
+            loss = predictions[:, class_num] # class number
+        grads = tape.gradient(loss, featureMaps)[0]
 
     # weighted average of all feature maps (\sum_k{\alpha^c_k \cdot A^k}) 
     alpha = tf.reduce_mean(grads, axis=(0, 1))  # Gradients average (\alpha^c_k)
 
-    out_img1 = np.ones(featr.shape[0: 2], dtype = np.float32)
+    out_img1 = np.ones(featureMaps[0].shape[0: 2], dtype = np.float32)
     for k, a in enumerate(alpha):
-        out_img1 += a * featr[:, :, k]
+        out_img1 += a * featureMaps[0][:, :, k]
 
-    # processing output img
-    out_img2 = cv2.resize(out_img1.numpy(), (dim, dim))  # bi-linear interpolation
-    output = (out_img2 - out_img2.min()) / (out_img2.max() - out_img2.min())  # scaling
-    
-    # plotting image
-    plt.imshow(output)
-    plt.show()
-        
-    return output
+    # bi-linear interpolation
+    out_img2 = cv2.resize(out_img1.numpy(), (dim, dim))
+    # scaling
+    out_img3 = (out_img2 - out_img2.min()) / (out_img2.max() - out_img2.min())
+    # coloring
+    out_img4 = cv2.applyColorMap(np.uint8(255*out_img3), cv2.COLORMAP_RAINBOW)
+    out_img5 = cv2.cvtColor(out_img4, cv2.COLOR_BGR2RGB)
 
+    # save image
+    cv2.imwrite(img_title, out_img5)
+
+    return out_img3
 
 
 def GetGenes(data, cutoff): 
@@ -131,13 +142,16 @@ def GetGenes(data, cutoff):
 
 if __name__ == '__main__':
 
+    
     # get user input
-    opts,args = getopt.getopt(sys.argv[1:], '-o:-c:', ['original=', 'cutoff='])
+    opts,args = getopt.getopt(sys.argv[1:], '-o:-c:-t:', ['original=', 'cutoff=', 'title='])
     for opt_name, opt_value in opts:
         if opt_name in ('-o', '--original'):
             if_plot_original = eval(opt_value)
         if opt_name in ('-c', '--cutoff'):
             cutoff = float(opt_value)
+        if opt_name in ('-t', '--title'):
+            title = str(opt_value)
 
     # read in data
     data = pd.read_csv('tumor_data.csv', index_col = 0)
@@ -157,7 +171,8 @@ if __name__ == '__main__':
         plt.show()
 
     # identifying significant pixels using guided Grad-CAM
-    cam_out = gGradCAM(conv_model = cnn, data = data_scaled_image, img_num = 0, class_num = 1, conv_layer = 0, if_save_img = False)
+    cam_out = gGradCAM(conv_model = cnn, data = data_scaled_image, img_num = 0, 
+              class_num = 1, conv_layer = 0, img_title = title)
 
     # extract significant genes for selected class
     topGenes = GetGenes(cam_out, cutoff = cutoff)
