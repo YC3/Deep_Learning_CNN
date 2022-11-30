@@ -94,7 +94,7 @@ def gGradCAM(conv_model, data, img_num, class_num, conv_layer, img_title = 'outp
                  [conv_model.layers[conv_layer].output, conv_model.output])
 
     g = tf.compat.v1.get_default_graph()
-    with g.gradient_override_map({'Relu': 'gRelu'}):
+    with g.gradient_override_map({'Relu': 'GuidedRelu'}):
         with tf.GradientTape() as tape:
             featureMaps, predictions = grad_model(img_tensor)
             loss = predictions[:, class_num] # class number
@@ -154,10 +154,10 @@ if __name__ == '__main__':
             title = str(opt_value)
 
     # read in data
-    data = pd.read_csv('tumor_data.csv', index_col = 0)
+    data = pd.read_csv('../data/tumor_data.csv', index_col = 0)
 
     # read in CNN model
-    cnn = tf.keras.models.load_model('model_cnn3_val.h5')
+    cnn = tf.keras.models.load_model('../saved_model/model_cnn3_val.h5')
     
     # embed dataFrame to image
     data_filtered, dim = feature_filter(data)
@@ -171,7 +171,7 @@ if __name__ == '__main__':
         plt.show()
 
     # identifying significant pixels using guided Grad-CAM
-    cam_out = gGradCAM(conv_model = cnn, data = data_scaled_image, img_num = 0, 
+    cam_out = gGradCAM(conv_model = cnn, data = data_scaled_image, img_num = 3, 
               class_num = 1, conv_layer = 0, img_title = title)
 
     # extract significant genes for selected class
